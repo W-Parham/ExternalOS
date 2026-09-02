@@ -2,7 +2,7 @@ This is a potential SyscalList of a ExoKernel
 
 
 // gated calls (need permission to even make the request)
-SID ← createSession(tag:str) ←not user system system just a session system
+SID ← createSession(tag:str) ← not user system system just a session system
 Char ← suspendSession(SID)
 Char ← TerminateSession(SID)
 Char ← ResumeSession(SID)
@@ -22,16 +22,17 @@ Void ← terminateThread(TID)
 void ← suspendThread(TID)
 Void ← resumeThread(TID)
 Void ← yield(nSec)
-AID ← virtualAlloc(VirtualAddress,#Count,*flags) ← does not deal with real pages
-char ← Free(AID)
-PRID ←GrantPage(PID,AID,*flags) ← does not deal with real pages
+SGID ← AllocateSegment(VirtualAddress,#Count,*flags) ← creates a segment of memory of size #Count with flags set from the given segument 
+this acts like virualAlloc in truth as it returns a makes a buffer of pages but it's a segument because of the limits of tracking every single page
+char ← FreeSegmet(SGID)
+PRID ← ShareSegment(PID,SGID,*flags) ← does not deal with real pages
 Void ← AcceptPage(PRID,virtual_Address) ← does not deal with real pages
 POID ← openPort(ID)
-`list[ID]` ← listPorts
+*Handle  ← listPorts
 char ← sendMessage(POID,...)
 char ← sendObject(POID,*ptr,Bytes:long,mode:long)
-message_Object <- pull_Message(POID)
-messageObject <- pullObject(POID)
+tuple <- pull_Message(POID)
+pullObject(POID,&Buffer)
 
 
 

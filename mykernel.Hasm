@@ -1,0 +1,49 @@
+#include <CoreFiles/x64/CPU.dll>{
+    getPageSize:int64
+    setPageHandler(page_ptr:ref[PageTable])
+}
+#include <CoreFiles/x64/UEFI.dll>{
+    getPageSize:int64
+    getMemoryMap:ref
+}
+
+
+data ProcessList:ref[array[ProcessControlBlock]]
+data kernelPage:ref[UEFI.memoryMap] = UEFI.getMemoryMap:call()
+
+class PageTable {
+    def __new(){
+        local var:ref[UEFI.memoryMap]
+        kernelPage:isZero{
+            --[
+                this prepares the kernel page because the kernel memory page hasn't been set
+            ]
+        }
+
+    }
+    def __init(self,VirtualAddress:int8,layout:ref[dict[str,system_byte]]){
+        
+    },
+    def __call__(self){
+
+    }
+    def setPagePtr(self:Ref[PageTable]){
+        CPU.setPageHandler:call(&self)
+    }
+    def PageSwap(self,PageID){
+        
+    }
+    def __free__(self){}
+}
+
+class ProcessControlBlock {
+    template {
+        ID:int64,
+        PageTable:Ref[PageTable],
+        AccessControlBitMask:ref[array[int32]]
+    }
+    def __init(self,PBCForm:ref){
+        new self.PageTable = Pagetable:call()
+        self.AccessControlBitMask = 
+    },
+}

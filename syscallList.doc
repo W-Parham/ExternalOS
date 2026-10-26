@@ -1,0 +1,146 @@
+This is a potential SyscalList of a microKernel with a ExoKernel spirit
+it uses a commomon FrameWork  & subsystem (flavor libary) 
+
+// gated calls (need permission to even make the syscall, 2nd these are high-prilgave calls meaning not just anyone can call)
+// to even call this they must have permission in their PCB.P&ACL[0-4]
+SID ← createSession(*MailBoxDiscerperTable,*tag:str) ← not user system system just a session system
+Char ← suspendSession(SID)
+Char ← TerminateSession(SID)
+Char ← ResumeSession(SID)
+PID ← CreateProcess(SID,*ProcessControlForm) <-- SID can be null (if null kernel assumes global process)
+char ← terminateProcess(PID)
+char ← suspendProcess(PID)
+char ← resumeProcess(PID)
+Void ← exitProcess(code)
+void ← getDeviceInfo(DID,*buffer) < move the info of the device into the given buffer 
+DID* ← claimDevice(ID,BAR,Virtual_Address) ← maps device directly into the virtualAddress given
+Pipe ← DevicePip(...) -- this isn't yet maped out correcly my idea is to use this to help DMA 
+Void ← FreeDevice(DID)
+char ← RegiserEvent(ID,*Fn)
+Char ← tiggerEvent(ID,...)
+Handle*  ← listMailBoxes
+char ← SetPermission(PID,TPID,value) <-- if you didn't make the topic you can't call it 
+TPID <- CreatePermssionTopic(PID) <-- this isn't fully needed as you can create a topic in the PCF it's here to add to it
+
+
+
+// nonGated calls (can be made by anyone)
+TID ← CreateThread(*fn,*stackSegMent)
+Success ← terminateThread(TID)
+Success ← suspendThread(TID)
+void ← resumeThread(TID)
+Void ← yield(nSec)
+SGID* ← AllocateSegment(VirtualAddress,#Count,*flags) ← virtualAllooc/mmap
+char ← SetSementFlags(SGID,*flags) <-- dose not work on a SSID
+Success ← FreeSegmet(SGID)
+SSID* ← ShareSegment(PIN,SGID,flags:int8_bitmask) ← this is a virutalSegment this is how to use tradtional shared memory 
+Void ← AcceptSegment(SSID,PIN,virtual_Address) ← this is a virtualSegment
+Success ← SwapSegments(SGID,SGID_2)
+Success ← actknowlegeSwap() -- this tells the kernel the process is ready for a segmenentSwap when it comes to shared SSIDs (don't know if it will be implmented)
+success ← openPort(Port) -- this binds the port to the currernt callers mailBoxIn
+char ← sendMessage(Port,Urgent_flag,....)  < -- nonBlocking for intigers and strings upto uint_default_size
+char ← sendObject(port,*ptr,Bytes:long,Urgent_flag) <-- limited to < 1 HarwarePage worth (calibarate to hardware) -- nonBlocking as well
+tuple[remaining,port,tuple[header,playload]] ← wait_Message() <pulls from your inbox Only (blocking)
+Success ← wait_Object(&Buffer) -- blocking
+char ← CheckPermssion(PID,*CheckForm) -- returns a flag (Jo/Cs) or a value in the return register 
+
+note the mail system uses a flushing protocal for IPC similaor to lua's IO unless on a unifiedlayoutMap
+2nd when it comes to the urgent_flag their is a price 
+
+
+typedef struct {
+	uint32_t sender_pid;
+	uint32_t payloadSize
+} header;
+
+typedef struct {
+	header info; <-- this is the header of a message
+	void payload[]
+} envlope;
+
+
+typedef struct { <-- this is not the ProcessControlBlock that is handled by the kernel 
+    // 1. Memory Blueprint & Payload Mapping
+		segments:dict[VA:SSID]             // eg. [".text", ".data", ".bss"]
+		entry_point_offset:VirtualAddress          
+		stack:SSID                   
+    	cpu_mode:long_bitMask                   // User Mode/Driver vs. Kernel_kit
+    // 3. Runtime Data Injection
+    	arguments: array[str]              // Command line inputs
+    	intial_P&ACL:dict[topic:index:int16,bitmask:int64]            // System capabilities (Network, Disk, IPC, etc.)
+    	priority: long                       // Scheduling priority tier
+    	MaxCoreTime: long                      // Maximum CPU execution time allowed
+    	maxMemory: long                    // Hard limit on runtime segmentAllocation (maxMemory/#Segments)
+		maxThreads:long
+} ProcessControlForm; <-- used by userServices to create Processes
+
+
+
+
+
+typedef struct {
+	segments:ref[tuple[int64,ref[SSID]]]
+	P&ACL:ref[array[int64,Config.MaxTopics]]  // permission&AccessContorlList System capabilities (Network, Disk, IPC, etc.) using bitmask based system
+	threads:ref[array[ref[ThreadControlBlock],PCF.MaxThreads]]
+	priority: long                       // Scheduling priority tier
+	maxTime: long                      // Maximum CPU execution time allowed
+	mailBoxIn:array[Config.maxSize]
+	mailboxOut:array[Config.maxSize] < only implented if meltldown affeted
+	ProcessTable[Ref[PageTable]]                                    // Memory
+} ProcessControlBlock; <-- used by the kernel to managePRocess 
+
+typedef struct {
+	haltAddress:int64
+	StackInfo:array[union[SSID,SP,SBP],3]
+	GeneralRegisters:array[int64,CPU.GeneralPurposeCount]
+	CPUflags:BitMask16
+} ThreadControlBlock;
+
+
+// 1. Define the pair type
+typedef struct {
+    int64_t TPID;   // The key
+    int8_t check_bit;  // The bit to check againsts
+} Topic_Request;
+
+// 2. Define the main struct with a capacity cap of 256
+typedef struct {
+    topic_Request Request[128]; // Holds up to 128 key-value pairs
+    int count;          // Tracks how many pairs are actually active (e.g., 0 to 128)
+} CheckForm; -- used to get a True/False from the CheckPermission argument 
+
+--- this is used in the allocateSegment these are the bitmask (int8)
+
+================================================================
+            MICROKERNEL / EXOKERNEL HYBRID
+	highLevel Memory Segment Flag Architecture (int16_bitmask) 
+	-- used only for the segment system (flag argument)
+================================================================
+• Bit 0 : R/W – Read/Write Privilege Control (0 = R/O, 1 = R/W) //  not accepted through AllocateSegment, but can be set through SetMemoryFlags
+• Bit 1 : COW – Copy-on-Write Optimization
+• bit 2 : commit_now   - Commit Page Now (used to commit pages of the segments immediately) (0-reserve,1-enable)
+• Bit 3 : wt/wb – Cache Write-Policy Selector (0 = Write-Through, 1 = Write-Back)
+• Bit 4 : DPC/EWC – Disable Page Cache Entirely/EnableWriteCombining 
+• bit 5 : exe – Execute-able
+• Bit 6 : MB (2MB) – Large Page Layout Allocation (Sets Page Size bit at the PD level)
+• Bit 7 : GB (1GB) – Huge Page Layout Allocation (Sets Page Size bit at the PDPT level)
+• Bit 8 : Guard-Bottom – Single Lower-Bound Guard Page
+• Bit 9 : Guard-Top – Single Upper-Bound Guard Page
+• Bit 10 : SigIso         - Segment Isolation (used to disable ShareSegment on this segment)
+• Bit 11 : PinPage      - Physical Page-Frame Pinning
+• Bit 12 : RESERVED     - [ Unassigned / Free / Backfilled ]
+• Bit 13 : RESERVED     - [ Unassigned / Free / Backfilled ]
+• Bit 14 : RESERVED     - [ Unassigned / Free / Backfilled ]
+• Bit 15 : RESERVED     - [ Unassigned / Free / Backfilled ]
+===============================================================================
+
+
+
+--- i meltdown becomes a issue
+
+my idea for the memory page layOut 
+supervisorSections:userSections
+KPTI:Enabled , []= a kernel segment not just one page
+KMP:[Kernel_Routines][All_Application_data per Page][Extra]:[UserData_inQutstion]
+UMP:[Kernel_Routine][physicalPageTable:only records if in use][CurrentProcessTable]:[UserData]
+CurrentProcressTable = [CPB,CTB,PermssionArray,pageTable,mailBoxin,mailBoxOut]
